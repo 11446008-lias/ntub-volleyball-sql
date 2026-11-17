@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>國立臺北商業大學女子排球隊（一般組）隊務管理系統 — 資料庫設計與 SQL 查詢實作</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans TC & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <!-- sql.js (SQLite compiled to WebAssembly) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', '"Inter"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            ntub: {
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            },
+            navy: {
+              800: '#1e293b',
+              900: '#0f172a',
+              950: '#080d1a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .code-editor {
+      font-family: 'JetBrains Mono', monospace;
+      tab-size: 2;
+      line-height: 1.6;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-amber-300 selection:text-ntub-900">
+
+  <!-- ==================== 頂部固定導覽列 (對齊老師範例四段式錨點) ==================== -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- 左側標題與排球圖示 -->
+        <a href="#case" class="flex items-center gap-3 group">
+          <div class="w-9 h-9 rounded-xl bg-ntub-900 text-amber-400 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"></path>
+              <path d="M2 12a15.3 15.3 0 0 1 10-4 15.3 15.3 0 0 1 10 4"></path>
+              <path d="M4.93 4.93c4.08 2.47 7.07 6.3 7.07 11.07"></path>
+            </svg>
+          </div>
+          <div>
+            <span class="text-ntub-900 font-extrabold text-sm sm:text-base tracking-tight block leading-tight">
+              資料庫查詢實作｜北商女排一般組隊務管理系統
+            </span>
+            <span class="text-[11px] text-slate-500 hidden sm:block">
+              國立臺北商業大學女子排球隊（一般組）· 資料庫設計與 SQL 互動教學
+            </span>
+          </div>
+        </a>
+
+        <!-- 右側四個標準評分指標錨點連結 -->
+        <nav class="hidden md:flex items-center gap-1.5">
+          <a href="#case" class="px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:text-ntub-900 hover:bg-blue-50 transition">
+            1. 案例背景
+          </a>
+          <a href="#design" class="px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:text-ntub-900 hover:bg-blue-50 transition">
+            2. 資料庫設計
+          </a>
+          <a href="#query" class="px-3 py-2 rounded-lg text-sm font-bold text-white bg-ntub-900 hover:bg-ntub-800 shadow-sm transition">
+            3. 查詢操作
+          </a>
+          <a href="#compare" class="px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:text-ntub-900 hover:bg-blue-50 transition">
+            4. 結果比較
+          </a>
+        </nav>
+
+        <!-- 資料庫狀態與手機選單 -->
+        <div class="flex items-center gap-2">
+          <div id="db-status-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs text-slate-600 font-medium">
+            <span id="db-status-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span id="db-status-text">SQLite 初始化中</span>
+          </div>
+          <button id="mobile-menu-btn" type="button" class="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none" aria-label="開啟導覽選單">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 手機版展開導覽選單 -->
+      <div id="mobile-menu" class="hidden md:hidden pb-3 pt-2 border-t border-slate-100 space-y-1">
+        <a href="#case" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-blue-50">1. 案例背景 (#case)</a>
+        <a href="#design" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-blue-50">2. 資料庫設計 (#design)</a>
+        <a href="#query" class="block px-3 py-2 rounded-lg text-sm font-bold text-ntub-900 bg-blue-50">3. 查詢操作 (#query)</a>
+        <a href="#compare" class="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-blue-50">4. 結果比較 (#compare)</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== 頂部簡潔學院風標題橫幅 ==================== -->
+  <div class="bg-gradient-to-r from-ntub-900 via-blue-900 to-slate-900 text-white border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div class="space-y-3 max-w-3xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
+            <span>🏐 資料庫管理系統課程專題</span>
+            <span>·</span>
+            <span>國立臺北商業大學女子排球隊（一般組）</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-snug">
+            北商女排一般組隊務管理系統<br class="sm:hidden" />
+            <span class="text-amber-400">資料庫設計與 SQL 查詢實作</span>
+          </h1>
+          <p class="text-blue-100 text-sm sm:text-base leading-relaxed">
+            本系統針對球隊日常的<strong>週二／四／日固定練球行事曆、友誼賽程（11/23 台藝大、11/26 師大）、月結出缺席試算表、受傷免補體能規則、隊費現金流報表</strong>與<strong>幹部角色權限</strong>進行關聯式資料庫正規化設計，並內建瀏覽器端 SQLite 引擎供即時測試與除錯。
+          </p>
+        </div>
+        <div class="flex flex-wrap sm:flex-nowrap lg:flex-col gap-2.5 shrink-0">
+          <a href="#query" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow transition">
+            ▶ 進入 SQL 互動查詢區
+          </a>
+          <a href="#compare" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/20 transition">
+            ⚖️ 檢視 SQL 結果比較解析
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 主內容容器 ==================== -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
+
+    <!-- ===================================================================== -->
+    <!-- 1. 案例背景 (#case)                                                   -->
+    <!-- ===================================================================== -->
+    <section id="case" class="scroll-mt-24 space-y-6">
+      <div class="flex items-center gap-3 border-b-2 border-ntub-900 pb-3">
+        <span class="px-3 py-1 rounded-lg bg-ntub-900 text-white font-mono font-bold text-sm">1</span>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-ntub-900">案例背景：資料庫給誰使用？要解決什麼問題？</h2>
+          <p class="text-xs sm:text-sm text-slate-500">系統定位、球隊固定行程與業務規則、幹部角色權限控制（RBAC）</p>
+        </div>
+      </div>
+
+      <!-- 1.1 系統使用對象與解決痛點 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-base sm:text-lg font-bold text-ntub-900 flex items-center gap-2">
+            <span class="w-2 h-5 rounded-full bg-amber-500"></span>
+            系統使用對象與要解決的核心問題
+          </h3>
+          <p class="text-sm text-slate-700 leading-relaxed">
+            本資料庫專為<strong>國立臺北商業大學（北商）女子排球隊（一般組）</strong>的隊長、各組幹部及全體在籍隊員設計。過去球隊仰賴 LINE 群組記事本公告賽程、紙本或零散 Excel 統計點名與隊費，常導致以下四大管理痛點：
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="font-bold text-ntub-900 mb-1">1. 固定練球與友誼賽程散落</div>
+              <p class="text-slate-600 leading-relaxed">每週固定三次訓練加上臨時約戰的友誼賽、大專盃、迎新聚餐，訊息容易被洗版遺漏。</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="font-bold text-ntub-900 mb-1">2. 月結出缺席統計耗時</div>
+              <p class="text-slate-600 leading-relaxed">每月需將每次練球點名彙整成試算表，人工計算出席率容易算錯或漏列新進隊員。</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="font-bold text-ntub-900 mb-1">3. 補體能追蹤缺乏條件過濾</div>
+              <p class="text-slate-600 leading-relaxed">隊規要求請假者自主補體能，但<strong>「受傷請假免補」</strong>，人工核對常發生漏追或誤記。</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="font-bold text-ntub-900 mb-1">4. 隊費收支缺乏即時結餘</div>
+              <p class="text-slate-600 leading-relaxed">收取期初隊費與購買比賽球、報名費支出後，隊員無法即時查詢當前公積金餘額。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1.2 球隊固定行程與補體能核心業務規則卡片 -->
+        <div class="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-base sm:text-lg font-bold text-ntub-900 flex items-center gap-2">
+            <span class="w-2 h-5 rounded-full bg-ntub-900"></span>
+            北商女排固定行程與隊務規則
+          </h3>
+          <div class="space-y-2.5 text-xs sm:text-sm">
+            <div class="p-3 rounded-xl bg-blue-50/80 border border-blue-200/80">
+              <div class="font-bold text-ntub-900 mb-1">📅 每週固定訓練時段</div>
+              <ul class="space-y-1 text-slate-700">
+                <li>• <strong>每週二 12:10–13:30</strong>：午間體能（心肺教室跑步機 / 重訓室重訓 / 地下跑道繩梯）</li>
+                <li>• <strong>每週四 17:30–20:30</strong>：例行室外練球（北商室外排球場）</li>
+                <li>• <strong>每週日 10:00–14:00</strong>：例行室內練球（北商體育館 2F）</li>
+              </ul>
+            </div>
+            <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80">
+              <div class="font-bold text-amber-900 mb-1">🏆 非固定重要日程與賽程</div>
+              <ul class="space-y-1 text-slate-700">
+                <li>• <strong>11/23（週一）</strong>：對國立臺灣藝術大學（台藝大）友誼賽</li>
+                <li>• <strong>11/26（週四）</strong>：對國立臺灣師範大學（師大）友誼賽</li>
+                <li>• <strong>12/12（週六）</strong>：大專盃提早南下高雄集結與住宿</li>
+                <li>• <strong>12/13（週日）– 12/14（週一）</strong>：大專排球聯賽一般組預賽（高雄）</li>
+              </ul>
+            </div>
+            <div class="p-3 rounded-xl bg-rose-50/80 border border-rose-200/80">
+              <div class="font-bold text-rose-900 mb-0.5">⚖️ 補體能判定核心規則</div>
+              <p class="text-slate-700 leading-relaxed">
+                凡是練球或比賽之<strong>「請假」或「無故缺席」</strong>皆須至心肺教室（跑步機）、重訓室或地下跑道（繩梯）自主補體能；<strong>唯獨請假原因為「受傷」者免補體能</strong>。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.3 角色權限設計對照表（RBAC 分權管理表） -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-ntub-900">角色權限設計（RBAC 分權管理對照表）</h3>
+            <p class="text-xs text-slate-500 mt-0.5">透過 <code class="font-mono bg-slate-200/70 px-1.5 py-0.5 rounded text-ntub-900">role_permissions</code> 資料表落實幹部職責分離與資料安全性</p>
+          </div>
+          <span class="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-ntub-900">依職務分配 Read / Write 權限</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-xs sm:text-sm">
+            <thead class="bg-ntub-900 text-white">
+              <tr>
+                <th class="py-3 px-4 font-bold">系統角色</th>
+                <th class="py-3 px-4 font-bold">代表幹部 / 成員</th>
+                <th class="py-3 px-4 font-bold">權限範圍說明</th>
+                <th class="py-3 px-4 font-bold text-center">行事曆管理</th>
+                <th class="py-3 px-4 font-bold text-center">出缺席點名</th>
+                <th class="py-3 px-4 font-bold text-center">補體能驗收</th>
+                <th class="py-3 px-4 font-bold text-center">經費現金流</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+              <tr class="bg-amber-50/40 hover:bg-amber-50">
+                <td class="py-3 px-4 font-extrabold text-ntub-900">👑 隊長</td>
+                <td class="py-3 px-4 text-slate-700">林語涵（四技財金三甲）</td>
+                <td class="py-3 px-4 text-slate-600">擁有系統全部模組的最高管理與增刪改查權限</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="py-3 px-4 font-bold text-slate-900">📋 出缺席長</td>
+                <td class="py-3 px-4 text-slate-700">陳冠妤（五專會資四甲）</td>
+                <td class="py-3 px-4 text-slate-600">負責維護練球行事曆、登錄出缺席與請假原因、匯出月報表</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="py-3 px-4 font-bold text-slate-900">⏱️ 體能長</td>
+                <td class="py-3 px-4 text-slate-700">張雅筑（四技企管二甲）</td>
+                <td class="py-3 px-4 text-slate-600">負責指派非受傷缺席人員之補體能菜單並審核驗收狀態</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-700">讀 / 寫</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="py-3 px-4 font-bold text-slate-900">🏐 一般隊員</td>
+                <td class="py-3 px-4 text-slate-700">吳佩珊、黃詩婷等 7 人</td>
+                <td class="py-3 px-4 text-slate-600">唯讀查詢權限：檢視行事曆、個人出缺席、待補體能與公開經費</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+                <td class="py-3 px-4 text-center text-slate-500">僅查詢</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- 2. 資料庫設計 (#design)                                               -->
+    <!-- ===================================================================== -->
+    <section id="design" class="scroll-mt-24 space-y-6">
+      <div class="flex items-center gap-3 border-b-2 border-ntub-900 pb-3">
+        <span class="px-3 py-1 rounded-lg bg-ntub-900 text-white font-mono font-bold text-sm">2</span>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-ntub-900">資料庫設計：ERD、欄位說明與樣本資料</h2>
+          <p class="text-xs sm:text-sm text-slate-500">符合第三正規化（3NF）的 6 張關聯式資料表結構與真實樣本資料</p>
+        </div>
+      </div>
+
+      <!-- 2.1 視覺化 SVG ERD 實體關聯圖 -->
+      <div class="bg-slate-900 rounded-2xl p-5 sm:p-6 shadow-md border border-slate-800 text-white space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-amber-400">實體關聯圖（Entity-Relationship Diagram, ERD）</h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              <span class="text-amber-400 font-mono font-bold">PK</span> 主鍵（Primary Key）｜<span class="text-sky-400 font-mono font-bold">FK</span> 外鍵（Foreign Key）｜實線表示 <span class="text-emerald-400 font-bold">1 : N</span> 關聯
+            </p>
+          </div>
+          <span class="text-xs bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-slate-300 self-start">
+            6 張正規化資料表架構
+          </span>
+        </div>
+
+        <!-- 響應式 SVG 容器 -->
+        <div class="w-full overflow-x-auto pb-1">
+          <svg viewBox="0 0 1120 550" class="w-full min-w-[960px] h-auto select-none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrow-many" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,1 L9,5 L0,9" fill="none" stroke="#38bdf8" stroke-width="1.8" />
+              </marker>
+              <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,1 L9,5 L0,9" fill="none" stroke="#f59e0b" stroke-width="1.8" />
+              </marker>
+            </defs>
+
+            <rect width="1120" height="550" rx="14" fill="#0f172a" />
+
+            <!-- 關聯連線 -->
+            <path d="M 380 120 L 290 120" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow-amber)" />
+            <text x="335" y="110" fill="#fbbf24" font-size="11" font-family="monospace" text-anchor="middle">1 : N (role)</text>
+
+            <path d="M 650 135 L 760 135" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arrow-many)" />
+            <text x="705" y="125" fill="#7dd3fc" font-size="11" font-family="monospace" text-anchor="middle">1 : N</text>
+
+            <path d="M 900 315 L 900 262" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arrow-many)" />
+            <text x="928" y="290" fill="#7dd3fc" font-size="11" font-family="monospace">1 : N</text>
+
+            <path d="M 760 215 L 650 335" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arrow-many)" />
+            <text x="682" y="265" fill="#7dd3fc" font-size="11" font-family="monospace" text-anchor="middle">1 : 1 (非受傷請假)</text>
+
+            <path d="M 515 245 L 515 315" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arrow-many)" />
+            <text x="542" y="282" fill="#7dd3fc" font-size="11" font-family="monospace">1 : N</text>
+
+            <path d="M 380 210 L 290 340" stroke="#38bdf8" stroke-width="2.2" marker-end="url(#arrow-many)" />
+            <text x="315" y="270" fill="#7dd3fc" font-size="11" font-family="monospace" text-anchor="middle">1 : N (經手人)</text>
+
+            <!-- 資料表 1: role_permissions -->
+            <g transform="translate(30, 35)">
+              <rect width="255" height="190" rx="12" fill="#1e293b" stroke="#475569" stroke-width="1.5" />
+              <path d="M0 12 Q0 0 12 0 L243 0 Q255 0 255 12 L255 36 L0 36 Z" fill="#334155" />
+              <text x="14" y="23" fill="#fbbf24" font-size="13" font-weight="bold" font-family="monospace">role_permissions (權限表)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-family="monospace">PK perm_id      INTEGER</text>
+              <text x="14" y="82" fill="#e2e8f0" font-size="12" font-family="monospace">   role         TEXT</text>
+              <text x="14" y="106" fill="#e2e8f0" font-size="12" font-family="monospace">   module_name  TEXT</text>
+              <text x="14" y="130" fill="#e2e8f0" font-size="12" font-family="monospace">   can_read     INTEGER (0/1)</text>
+              <text x="14" y="154" fill="#e2e8f0" font-size="12" font-family="monospace">   can_write    INTEGER (0/1)</text>
+              <text x="14" y="177" fill="#94a3b8" font-size="11">控管隊長/幹部/隊員模組權限</text>
+            </g>
+
+            <!-- 資料表 2: members -->
+            <g transform="translate(380, 30)">
+              <rect width="270" height="215" rx="12" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
+              <path d="M0 12 Q0 0 12 0 L258 0 Q270 0 270 12 L270 36 L0 36 Z" fill="#1e3a8a" />
+              <text x="14" y="23" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">members (球員名冊主表)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-weight="bold" font-family="monospace">PK student_id   TEXT (學號)</text>
+              <text x="14" y="82" fill="#f8fafc" font-size="12" font-family="monospace">   name         TEXT (姓名)</text>
+              <text x="14" y="106" fill="#f8fafc" font-size="12" font-family="monospace">   class_name   TEXT (北商班級)</text>
+              <text x="14" y="130" fill="#f8fafc" font-size="12" font-family="monospace">   jersey_no    INTEGER (背號)</text>
+              <text x="14" y="154" fill="#f8fafc" font-size="12" font-family="monospace">   position     TEXT (場上位置)</text>
+              <text x="14" y="178" fill="#fbbf24" font-size="12" font-family="monospace">   role         TEXT (隊務角色)</text>
+              <text x="14" y="201" fill="#94a3b8" font-size="11">核心實體：串聯所有點名與帳務</text>
+            </g>
+
+            <!-- 資料表 3: attendance_records -->
+            <g transform="translate(760, 30)">
+              <rect width="320" height="230" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8" />
+              <path d="M0 12 Q0 0 12 0 L308 0 Q320 0 320 12 L320 36 L0 36 Z" fill="#0284c7" />
+              <text x="14" y="23" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">attendance_records (出缺席表)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-family="monospace">PK attendance_id INTEGER</text>
+              <text x="14" y="82" fill="#7dd3fc" font-size="12" font-family="monospace">FK event_id      INTEGER → events</text>
+              <text x="14" y="106" fill="#7dd3fc" font-size="12" font-family="monospace">FK student_id    TEXT → members</text>
+              <text x="14" y="130" fill="#f8fafc" font-size="12" font-family="monospace">   status        TEXT (出席/請假...)</text>
+              <text x="14" y="154" fill="#f8fafc" font-size="12" font-family="monospace">   leave_reason  TEXT (受傷/事假...)</text>
+              <text x="14" y="178" fill="#f8fafc" font-size="12" font-family="monospace">   note          TEXT (備註說明)</text>
+              <text x="14" y="208" fill="#bae6fd" font-size="11">解決 members 與 events 多對多關聯</text>
+            </g>
+
+            <!-- 資料表 4: finance_ledger -->
+            <g transform="translate(30, 315)">
+              <rect width="275" height="210" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="1.5" />
+              <path d="M0 12 Q0 0 12 0 L263 0 Q275 0 275 12 L275 36 L0 36 Z" fill="#059669" />
+              <text x="14" y="23" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">finance_ledger (經費現金流)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-family="monospace">PK tx_id        INTEGER</text>
+              <text x="14" y="82" fill="#f8fafc" font-size="12" font-family="monospace">   tx_date      TEXT (交易日期)</text>
+              <text x="14" y="106" fill="#f8fafc" font-size="12" font-family="monospace">   category     TEXT (收支類別)</text>
+              <text x="14" y="130" fill="#f8fafc" font-size="12" font-family="monospace">   description  TEXT (摘要明細)</text>
+              <text x="14" y="154" fill="#f8fafc" font-size="12" font-family="monospace">   tx_type      TEXT (收入 / 支出)</text>
+              <text x="14" y="178" fill="#f8fafc" font-size="12" font-family="monospace">   amount       INTEGER (金額)</text>
+              <text x="14" y="200" fill="#7dd3fc" font-size="12" font-family="monospace">FK recorded_by  TEXT → members</text>
+            </g>
+
+            <!-- 資料表 5: fitness_makeups -->
+            <g transform="translate(365, 315)">
+              <rect width="315" height="210" rx="12" fill="#1e293b" stroke="#a855f7" stroke-width="1.5" />
+              <path d="M0 12 Q0 0 12 0 L303 0 Q315 0 315 12 L315 36 L0 36 Z" fill="#7e22ce" />
+              <text x="14" y="23" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">fitness_makeups (補體能追蹤)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-family="monospace">PK makeup_id           INTEGER</text>
+              <text x="14" y="82" fill="#7dd3fc" font-size="12" font-family="monospace">FK attendance_id       INTEGER → att</text>
+              <text x="14" y="106" fill="#7dd3fc" font-size="12" font-family="monospace">FK student_id          TEXT → members</text>
+              <text x="14" y="130" fill="#f8fafc" font-size="12" font-family="monospace">   workout_plan        TEXT (補練菜單)</text>
+              <text x="14" y="154" fill="#f8fafc" font-size="12" font-family="monospace">   completed_date      TEXT (完成日)</text>
+              <text x="14" y="178" fill="#f8fafc" font-size="12" font-family="monospace">   verification_status TEXT (已驗收/待補)</text>
+              <text x="14" y="200" fill="#e9d5ff" font-size="11">僅追蹤非受傷請假與無故缺席者</text>
+            </g>
+
+            <!-- 資料表 6: team_events -->
+            <g transform="translate(750, 315)">
+              <rect width="330" height="210" rx="12" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5" />
+              <path d="M0 12 Q0 0 12 0 L318 0 Q330 0 330 12 L330 36 L0 36 Z" fill="#b45309" />
+              <text x="14" y="23" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">team_events (球隊行事曆表)</text>
+              <text x="14" y="58" fill="#fbbf24" font-size="12" font-family="monospace">PK event_id    INTEGER</text>
+              <text x="14" y="82" fill="#f8fafc" font-size="12" font-family="monospace">   event_date  TEXT (活動日期)</text>
+              <text x="14" y="106" fill="#f8fafc" font-size="12" font-family="monospace">   start_time  TEXT / end_time TEXT</text>
+              <text x="14" y="130" fill="#f8fafc" font-size="12" font-family="monospace">   event_type  TEXT (固定體能/友誼賽...)</text>
+              <text x="14" y="154" fill="#f8fafc" font-size="12" font-family="monospace">   title       TEXT (如：台藝大友誼賽)</text>
+              <text x="14" y="178" fill="#f8fafc" font-size="12" font-family="monospace">   location    TEXT (北商體育館/室外場)</text>
+              <text x="14" y="200" fill="#fde68a" font-size="11">涵蓋週二/四/日固定練球與重要賽程</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- 口頭報告設計邏輯說明 -->
+        <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700 text-xs sm:text-sm text-slate-300 leading-relaxed space-y-1.5">
+          <div class="font-bold text-amber-400">🎤 口頭報告設計邏輯說明：</div>
+          <p>
+            1. <strong>為何將「請假（attendance_records）」與「補體能（fitness_makeups）」拆成兩張表？</strong> 因為並非每次出缺席都要補體能（例如正常出席或「受傷」請假就不需要）。拆表可避免在 <code class="font-mono text-amber-300">attendance_records</code> 留下大量空值（NULL），完全符合第三正規化（3NF）並減少資料冗余。<br />
+            2. <strong>為何用 <code class="font-mono text-amber-300">role_permissions</code> 管理權限？</strong> 將權限規則獨立為資料表而非寫死在程式裡，未來若增設「副隊長」或「總務長」，只需在資料表新增權限列即可動態套用。
+          </p>
+        </div>
+      </div>
+
+      <!-- 2.2 資料表欄位說明與樣本資料切換器 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 sm:p-6 border-b border-slate-200 bg-slate-50">
+          <h3 class="text-base sm:text-lg font-bold text-ntub-900">資料表欄位說明與樣本資料預覽（6 張資料表切換器）</h3>
+          <p class="text-xs sm:text-sm text-slate-600 mt-1">點擊下方任一分頁按鈕，檢視該資料表的<strong>欄位名稱、資料型態、主/外鍵說明</strong>，以及已載入 SQLite 中的<strong>真實樣本資料</strong>：</p>
+
+          <div id="schema-tabs" class="flex flex-wrap gap-2 mt-4">
+            <button type="button" data-table="members" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-ntub-900 text-white shadow-sm transition">
+              1. members (球員名冊)
+            </button>
+            <button type="button" data-table="role_permissions" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition">
+              2. role_permissions (角色權限)
+            </button>
+            <button type="button" data-table="team_events" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition">
+              3. team_events (球隊行事曆)
+            </button>
+            <button type="button" data-table="attendance_records" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition">
+              4. attendance_records (出缺席紀錄)
+            </button>
+            <button type="button" data-table="fitness_makeups" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition">
+              5. fitness_makeups (補體能紀錄)
+            </button>
+            <button type="button" data-table="finance_ledger" class="schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition">
+              6. finance_ledger (經費現金流)
+            </button>
+          </div>
+        </div>
+
+        <!-- 上下結構（對齊老師範例清晰閱讀流）：上方欄位規格表 + 下方完整樣本資料表 -->
+        <div class="p-5 sm:p-6 space-y-6">
+          <!-- 上方：欄位規格說明 -->
+          <div class="space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <h4 id="schema-table-title" class="font-bold text-ntub-900 text-base font-mono">members</h4>
+                <span id="schema-table-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-ntub-900 font-semibold">核心主表</span>
+              </div>
+              <span class="text-xs text-slate-500">資料表結構定義（Schema Definition）</span>
+            </div>
+            <p id="schema-table-desc" class="text-xs sm:text-sm text-slate-600 leading-relaxed"></p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="min-w-full text-left text-xs sm:text-sm">
+                <thead class="bg-slate-100 text-slate-800 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="py-2.5 px-4">欄位名稱</th>
+                    <th class="py-2.5 px-4">資料型態</th>
+                    <th class="py-2.5 px-4">主 / 外鍵約束</th>
+                    <th class="py-2.5 px-4">欄位說明</th>
+                  </tr>
+                </thead>
+                <tbody id="schema-columns-body" class="divide-y divide-slate-100">
+                  <!-- JS 動態填入 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 下方：真實 SQLite 樣本資料表格 -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-ntub-900 text-base">樣本資料內容（Sample Data — 即時讀取自 SQLite）</h4>
+              <span id="sample-row-count" class="text-xs font-mono text-ntub-900 font-bold bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">共 0 筆</span>
+            </div>
+            <div class="overflow-x-auto max-h-[340px] border border-slate-200 rounded-xl">
+              <table class="min-w-full text-left text-xs sm:text-sm whitespace-nowrap">
+                <thead id="sample-data-head" class="bg-ntub-900 text-white sticky top-0 z-10">
+                  <!-- JS 動態填入 -->
+                </thead>
+                <tbody id="sample-data-body" class="divide-y divide-slate-100 bg-white">
+                  <!-- JS 動態填入 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- 3. 查詢操作 (#query) — 嚴格對照老師範例的互動結構                     -->
+    <!-- ===================================================================== -->
+    <section id="query" class="scroll-mt-24 space-y-6">
+      <div class="flex items-center gap-3 border-b-2 border-ntub-900 pb-3">
+        <span class="px-3 py-1 rounded-lg bg-ntub-900 text-white font-mono font-bold text-sm">3</span>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-ntub-900">查詢操作：查詢問題、預設 SQL、預期結果與實際執行結果</h2>
+          <p class="text-xs sm:text-sm text-slate-500">選擇任一情境題目，修改 SQL 語法並點擊執行，立即對照「預期結果」與「實際執行結果 / 錯誤訊息」</p>
+        </div>
+      </div>
+
+      <!-- 5 道情境題目選擇器 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="preset-buttons">
+        <button type="button" data-preset="0" class="preset-btn text-left p-4 rounded-xl border-2 border-ntub-900 bg-ntub-900 text-white shadow-sm transition">
+          <div class="text-xs font-bold text-amber-300 mb-1">題目 1 · 月結試算表</div>
+          <div class="font-bold text-sm leading-snug">11月全隊出缺席統計與出席率</div>
+        </button>
+
+        <button type="button" data-preset="1" class="preset-btn text-left p-4 rounded-xl border border-slate-200 bg-white text-slate-900 hover:border-ntub-900 shadow-sm transition">
+          <div class="text-xs font-bold text-ntub-700 mb-1">題目 2 · 排除受傷請假</div>
+          <div class="font-bold text-sm leading-snug">待補體能名單追蹤（排除受傷）</div>
+        </button>
+
+        <button type="button" data-preset="2" class="preset-btn text-left p-4 rounded-xl border border-slate-200 bg-white text-slate-900 hover:border-ntub-900 shadow-sm transition">
+          <div class="text-xs font-bold text-ntub-700 mb-1">題目 3 · 經費現金流</div>
+          <div class="font-bold text-sm leading-snug">隊費收支明細與即時累計餘額</div>
+        </button>
+
+        <button type="button" data-preset="3" class="preset-btn text-left p-4 rounded-xl border border-slate-200 bg-white text-slate-900 hover:border-ntub-900 shadow-sm transition">
+          <div class="text-xs font-bold text-ntub-700 mb-1">題目 4 · 友誼賽名單</div>
+          <div class="font-bold text-sm leading-snug">11/23 台藝大與 11/26 師大出賽名單</div>
+        </button>
+
+        <button type="button" data-preset="4" class="preset-btn text-left p-4 rounded-xl border border-slate-200 bg-white text-slate-900 hover:border-ntub-900 shadow-sm transition">
+          <div class="text-xs font-bold text-ntub-700 mb-1">題目 5 · 角色權限表</div>
+          <div class="font-bold text-sm leading-snug">各幹部角色系統模組權限清單</div>
+        </button>
+      </div>
+
+      <!-- 步驟 1：【查詢問題】與解題邏輯提示 -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span id="q-badge" class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-ntub-900">
+            題目 1 · 月度出缺席統計試算表
+          </span>
+          <span class="text-xs font-mono text-slate-400">Step 1 · Problem Statement</span>
+        </div>
+        <h3 id="q-title" class="text-lg sm:text-xl font-extrabold text-slate-900">
+          彙整 11 月份每位隊員的應到次數、出席、遲到、請假、無故缺席次數與出席率
+        </h3>
+        <p id="q-problem" class="text-sm text-slate-700 leading-relaxed">
+          每月底出缺席長需要產出一份月度出缺席試算表，列出全隊 10 位隊員在 11 月份的點名總次數、出席、遲到、請假、無故缺席次數，並計算實際出席率（將「出席」與「遲到」計入到場）。
+        </p>
+        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 text-xs sm:text-sm text-slate-800">
+          <strong class="text-amber-900">💡 解題邏輯與報告提示：</strong>
+          <span id="q-explain">使用 LEFT JOIN 以 members 為主表確保名單不漏人，並搭配 SUM(CASE WHEN ...) 條件加總產生橫向試算表欄位。</span>
+        </div>
+      </div>
+
+      <!-- 步驟 2：【預期結果（Expected Result）】靜態基準預覽表（對照老師範例核心特色） -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm text-ntub-900">📋 預期結果（Expected Result — 題目標準輸出對照）</span>
+            <span id="expected-meta" class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-blue-100 text-ntub-900 font-semibold">
+              基準結果
+            </span>
+          </div>
+          <span class="text-xs text-slate-500">修改下方 SQL 後，可與此基準表格比對差異</span>
+        </div>
+        <div class="overflow-x-auto max-h-[280px]">
+          <table class="min-w-full text-left text-xs sm:text-sm whitespace-nowrap">
+            <thead id="expected-thead" class="bg-slate-800 text-white sticky top-0 z-10"></thead>
+            <tbody id="expected-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 步驟 3 & 4：並排或上下互動區【SQL 查詢編輯器】＋【實際查詢結果 / 錯誤訊息（Actual Output）】 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- 左側（5欄）：可自由編輯的 SQL 查詢編輯器 -->
+        <div class="lg:col-span-5 bg-navy-900 rounded-2xl shadow-md border border-slate-800 overflow-hidden">
+          <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-amber-400">SQL 查詢編輯器（可修改測試）</span>
+            <span class="text-[11px] font-mono text-slate-400">SQLite 3</span>
+          </div>
+
+          <div class="p-4">
+            <textarea id="sql-editor" rows="14" spellcheck="false" class="code-editor w-full bg-navy-950 text-emerald-300 p-3.5 rounded-xl border border-slate-700 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none text-xs sm:text-sm resize-y"></textarea>
+          </div>
+
+          <!-- 三顆核心操作按鈕（嚴格對照需求規格） -->
+          <div class="px-4 pb-4 space-y-2.5">
+            <button type="button" id="btn-run-sql" class="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-[0.99] text-slate-950 font-extrabold text-sm shadow transition flex items-center justify-center gap-2">
+              <span>▶ 執行查詢 (Run SQL)</span>
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="btn-reset-sql" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+                ↺ 重設為題目預設 SQL
+              </button>
+              <button type="button" id="btn-format-demo-err" class="py-2 px-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-200 font-semibold text-xs border border-rose-800/80 transition">
+                ⚠️ 測試錯誤語法（示範報錯）
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右側（7欄）：實際查詢結果 / 錯誤訊息（Actual Output） -->
+        <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-sm text-ntub-900">📊 實際查詢結果 / 錯誤訊息（Actual Output）</span>
+              <span id="result-meta" class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                準備就緒
+              </span>
+            </div>
+            <span id="result-time" class="text-xs font-mono text-slate-500">耗時：0.00 ms</span>
+          </div>
+
+          <!-- 紅色錯誤警示框（語法或欄位錯誤時顯示） -->
+          <div id="sql-error-box" class="hidden m-5 p-4 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-950 space-y-2.5">
+            <div class="flex items-center gap-2 font-extrabold text-sm text-rose-700">
+              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <span>SQL 執行錯誤訊息（SQLite Error）</span>
+            </div>
+            <pre id="sql-error-msg" class="font-mono text-xs sm:text-sm bg-white p-3 rounded-lg border border-rose-200 text-rose-800 whitespace-pre-wrap font-semibold"></pre>
+            <div class="text-xs text-rose-800 bg-rose-100/70 p-2.5 rounded-lg">
+              <strong>除錯檢查清單：</strong>請確認資料表名稱（<code class="font-mono">members</code>、<code class="font-mono">team_events</code>、<code class="font-mono">attendance_records</code>、<code class="font-mono">fitness_makeups</code>、<code class="font-mono">finance_ledger</code>、<code class="font-mono">role_permissions</code>）與欄位拼字是否正確，或點擊左側「重設為題目預設 SQL」。
+            </div>
+          </div>
+
+          <!-- 正常執行結果表格 -->
+          <div id="sql-result-container" class="overflow-x-auto max-h-[420px]">
+            <table class="min-w-full text-left text-xs sm:text-sm whitespace-nowrap">
+              <thead id="result-thead" class="bg-ntub-900 text-white sticky top-0 z-10"></thead>
+              <tbody id="result-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- 4. 結果比較 (#compare)                                                -->
+    <!-- ===================================================================== -->
+    <section id="compare" class="scroll-mt-24 space-y-6">
+      <div class="flex items-center gap-3 border-b-2 border-ntub-900 pb-3">
+        <span class="px-3 py-1 rounded-lg bg-ntub-900 text-white font-mono font-bold text-sm">4</span>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-ntub-900">結果比較：針對同一問題，修改 SQL 後結果如何改變及原因</h2>
+          <p class="text-xs sm:text-sm text-slate-500">兩組關鍵 SQL 邏輯對照（NULL 三值邏輯陷阱、INNER JOIN vs LEFT JOIN 差異），支援一鍵帶入上方實測</p>
+        </div>
+      </div>
+
+      <!-- 比較案例 1：WHERE 條件與 NULL 邏輯對補體能名單的影響 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="bg-ntub-900 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2.5 py-0.5 rounded bg-amber-400 text-slate-950 font-extrabold text-xs">比較案例 1</span>
+            <h3 class="text-white font-bold text-base sm:text-lg">同一問題：「找出 11 月需要補體能的缺席紀錄（排除受傷請假）」</h3>
+          </div>
+          <span class="text-xs text-amber-300 font-mono">WHERE 條件與 NULL 三值邏輯</span>
+        </div>
+
+        <div class="p-6 space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 版本 A（修改前 SQL） -->
+            <div class="rounded-2xl border border-rose-200 bg-rose-50/40 p-5 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-rose-800 text-sm">❌ 版本 A（修改前 SQL）：直接寫 != '受傷'</span>
+                  <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">僅回傳 4 筆（漏掉無故缺席！）</span>
+                </div>
+                <pre class="font-mono text-xs bg-navy-900 text-slate-200 p-3.5 rounded-xl overflow-x-auto leading-relaxed">SELECT m.name, e.event_date, e.title,
+       a.status, a.leave_reason
+FROM attendance_records a
+JOIN members m ON a.student_id = m.student_id
+JOIN team_events e ON a.event_id = e.event_id
+WHERE a.status IN ('請假', '無故缺席')
+  <span class="text-rose-400 font-bold">AND a.leave_reason != '受傷';</span></pre>
+                <div class="text-xs sm:text-sm text-slate-700 space-y-1">
+                  <p><strong>查詢結果表現：</strong>只抓出 <strong>4 筆</strong>有填寫請假原因的紀錄（期中考溫書、打工衝堂、家裡有事）；<strong>2 筆「無故缺席」的隊員（王郁婷、許庭瑜）竟然從補體能名單中消失了！</strong></p>
+                </div>
+              </div>
+              <button type="button" onclick="loadCompareSQL('case1A')" class="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-rose-100 text-rose-800 font-bold text-xs border border-rose-300 transition">
+                ▲ 一鍵帶入版本 A 至上方編輯器實測
+              </button>
+            </div>
+
+            <!-- 版本 B（修改後 SQL） -->
+            <div class="rounded-2xl border-2 border-emerald-400 bg-emerald-50/40 p-5 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-emerald-900 text-sm">✅ 版本 B（修改後 SQL）：補上 IS NULL 條件</span>
+                  <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold">正確回傳 6 筆</span>
+                </div>
+                <pre class="font-mono text-xs bg-navy-900 text-emerald-300 p-3.5 rounded-xl overflow-x-auto leading-relaxed">SELECT m.name, e.event_date, e.title,
+       a.status, a.leave_reason
+FROM attendance_records a
+JOIN members m ON a.student_id = m.student_id
+JOIN team_events e ON a.event_id = e.event_id
+WHERE a.status IN ('請假', '無故缺席')
+  <span class="text-amber-300 font-bold">AND (a.leave_reason IS NULL OR a.leave_reason != '受傷');</span></pre>
+                <div class="text-xs sm:text-sm text-slate-700 space-y-1">
+                  <p><strong>查詢結果表現：</strong>完整回傳 <strong>6 筆</strong>應補體能紀錄——成功排除 3 筆「受傷」請假，並正確把 4 筆非受傷請假與 2 筆「無故缺席」全部納入補練名單。</p>
+                </div>
+              </div>
+              <button type="button" onclick="loadCompareSQL('case1B')" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition">
+                ▲ 一鍵帶入版本 B 至上方編輯器實測
+              </button>
+            </div>
+          </div>
+
+          <!-- 結果改變原因說明 -->
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-5 space-y-1.5">
+            <h4 class="font-bold text-ntub-900 text-sm sm:text-base">📌 結果改變原因說明（SQL 三值邏輯 3-Valued Logic）：</h4>
+            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+              因為「無故缺席」的隊員沒有遞交假單，其在資料庫中的 <code class="font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300">leave_reason</code> 欄位值為 <strong>NULL（未知值）</strong>。在 SQL 運算規則中，<code class="font-mono">NULL != '受傷'</code> 的評估結果不是 <code class="font-mono">TRUE</code>，而是 <code class="font-mono">UNKNOWN</code>，因此會被 <code class="font-mono">WHERE</code> 子句直接過濾剔除，造成「無故缺席者反而不用補體能」的嚴重邏輯漏洞。加上 <code class="font-mono font-bold text-emerald-800">a.leave_reason IS NULL OR</code> 後，才能同時涵蓋無假單的缺席者與非受傷請假者。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 比較案例 2：INNER JOIN 與 LEFT JOIN 對月度出缺席試算表的影響 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="bg-ntub-900 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2.5 py-0.5 rounded bg-sky-400 text-slate-950 font-extrabold text-xs">比較案例 2</span>
+            <h3 class="text-white font-bold text-base sm:text-lg">同一問題：「產出 11 月全隊所有成員的出缺席統計試算表」</h3>
+          </div>
+          <span class="text-xs text-sky-300 font-mono">INNER JOIN vs LEFT JOIN 差異</span>
+        </div>
+
+        <div class="p-6 space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 版本 A -->
+            <div class="rounded-2xl border border-rose-200 bg-rose-50/40 p-5 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-rose-800 text-sm">❌ 版本 A（修改前 SQL）：使用 INNER JOIN</span>
+                  <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">僅回傳 9 人（新隊員消失）</span>
+                </div>
+                <pre class="font-mono text-xs bg-navy-900 text-slate-200 p-3.5 rounded-xl overflow-x-auto leading-relaxed">SELECT m.student_id, m.name, m.class_name,
+       COUNT(a.attendance_id) AS total_records
+FROM members m
+<span class="text-rose-400 font-bold">INNER JOIN attendance_records a</span>
+  ON m.student_id = a.student_id
+GROUP BY m.student_id, m.name, m.class_name;</pre>
+                <div class="text-xs sm:text-sm text-slate-700 space-y-1">
+                  <p><strong>查詢結果表現：</strong>月度試算表只列出 <strong>9 位</strong>隊員；11 月底剛加入一般組、尚未排入點名紀錄的新隊員「周品妍（11342010）」整個人從報表中消失。</p>
+                </div>
+              </div>
+              <button type="button" onclick="loadCompareSQL('case2A')" class="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-rose-100 text-rose-800 font-bold text-xs border border-rose-300 transition">
+                ▲ 一鍵帶入版本 A 至上方編輯器實測
+              </button>
+            </div>
+
+            <!-- 版本 B -->
+            <div class="rounded-2xl border-2 border-emerald-400 bg-emerald-50/40 p-5 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-emerald-900 text-sm">✅ 版本 B（修改後 SQL）：改用 LEFT JOIN</span>
+                  <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold">完整保留全隊 10 人</span>
+                </div>
+                <pre class="font-mono text-xs bg-navy-900 text-emerald-300 p-3.5 rounded-xl overflow-x-auto leading-relaxed">SELECT m.student_id, m.name, m.class_name,
+       COUNT(a.attendance_id) AS total_records
+FROM members m
+<span class="text-amber-300 font-bold">LEFT JOIN attendance_records a</span>
+  ON m.student_id = a.student_id
+GROUP BY m.student_id, m.name, m.class_name;</pre>
+                <div class="text-xs sm:text-sm text-slate-700 space-y-1">
+                  <p><strong>查詢結果表現：</strong>完整保留全隊 <strong>10 位</strong>在籍隊員，新隊員「周品妍」的點名次數正確顯示為 <code class="font-mono font-bold">0</code>，確保名冊與月結試算表人數一致。</p>
+                </div>
+              </div>
+              <button type="button" onclick="loadCompareSQL('case2B')" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition">
+                ▲ 一鍵帶入版本 B 至上方編輯器實測
+              </button>
+            </div>
+          </div>
+
+          <!-- 結果改變原因說明 -->
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-5 space-y-1.5">
+            <h4 class="font-bold text-ntub-900 text-sm sm:text-base">📌 結果改變原因說明（集合交集 vs 左外部聯結）：</h4>
+            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+              <code class="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-300">INNER JOIN</code> 只會保留左右兩張資料表「同時存在對應學號（交集）」的資料列，一旦某位隊員在該月份尚無點名紀錄，就會被排除在報表之外。製作全隊月結試算表時，必須以球員名冊 <code class="font-mono">members</code> 為主表搭配 <code class="font-mono font-bold text-ntub-900">LEFT JOIN</code>，並使用 <code class="font-mono">COUNT(a.attendance_id)</code>（指定非主鍵欄位而非 <code class="font-mono">COUNT(*)</code>），讓沒有點名紀錄的成員正確計數為 0。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== 頁尾 ==================== -->
+  <footer class="bg-slate-900 text-slate-400 border-t border-slate-800 mt-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs sm:text-sm">
+      <div>
+        <strong class="text-white">國立臺北商業大學女子排球隊（一般組）隊務管理系統</strong> · 資料庫設計與 SQL 查詢實作
+      </div>
+      <div class="text-slate-500">
+        Built with SQLite WebAssembly (<code class="font-mono text-amber-400">sql.js</code>) & Tailwind CSS
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== JavaScript 核心邏輯 ==================== -->
+  <script>
+    // =========================================================================
+    // 1. SQLite 建表與北商女排一般組真實樣本資料腳本 (INIT_SQL_SCRIPT)
+    // =========================================================================
+    const INIT_SQL_SCRIPT = `
+      PRAGMA foreign_keys = ON;
+
+      -- 1. 球員名冊主表 (members)
+      CREATE TABLE members (
+        student_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        jersey_no INTEGER UNIQUE,
+        position TEXT NOT NULL,
+        role TEXT NOT NULL,
+        join_year INTEGER NOT NULL
+      );
+
+      -- 2. 角色權限控管表 (role_permissions)
+      CREATE TABLE role_permissions (
+        perm_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        module_name TEXT NOT NULL,
+        module_label TEXT NOT NULL,
+        can_read INTEGER NOT NULL CHECK(can_read IN (0, 1)),
+        can_write INTEGER NOT NULL CHECK(can_write IN (0, 1))
+      );
+
+      -- 3. 球隊行事曆表 (team_events)
+      CREATE TABLE team_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_date TEXT NOT NULL,
+        day_of_week TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        schedule_type TEXT NOT NULL CHECK(schedule_type IN ('固定活動', '非固定活動')),
+        event_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        location TEXT NOT NULL
+      );
+
+      -- 4. 出缺席與請假紀錄表 (attendance_records)
+      CREATE TABLE attendance_records (
+        attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        student_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        leave_reason TEXT,
+        note TEXT,
+        FOREIGN KEY (event_id) REFERENCES team_events(event_id),
+        FOREIGN KEY (student_id) REFERENCES members(student_id)
+      );
+
+      -- 5. 補體能追蹤表 (fitness_makeups)
+      CREATE TABLE fitness_makeups (
+        makeup_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        attendance_id INTEGER NOT NULL UNIQUE,
+        student_id TEXT NOT NULL,
+        workout_plan TEXT NOT NULL,
+        completed_date TEXT,
+        verification_status TEXT NOT NULL,
+        FOREIGN KEY (attendance_id) REFERENCES attendance_records(attendance_id),
+        FOREIGN KEY (student_id) REFERENCES members(student_id)
+      );
+
+      -- 6. 球隊經費現金流表 (finance_ledger)
+      CREATE TABLE finance_ledger (
+        tx_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tx_date TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        tx_type TEXT NOT NULL CHECK(tx_type IN ('收入', '支出')),
+        amount INTEGER NOT NULL CHECK(amount >= 0),
+        recorded_by TEXT NOT NULL,
+        FOREIGN KEY (recorded_by) REFERENCES members(student_id)
+      );
+
+      -- 匯入球員名冊樣本資料 (共 10 位北商女排一般組隊員，含 11 月底剛入隊新人 11342010)
+      INSERT INTO members VALUES
+        ('11141001', '林語涵', '四技財金三甲', 1,  '舉球', '隊長',     111),
+        ('11052002', '陳冠妤', '五專會資四甲', 4,  '主攻', '出缺席長', 110),
+        ('11243003', '張雅筑', '四技企管二甲', 7,  '攔中', '體能長',   112),
+        ('11141004', '吳佩珊', '四技財金三乙', 3,  '副攻', '一般隊員', 111),
+        ('11244005', '黃詩婷', '四技資管二甲', 9,  '自由', '一般隊員', 112),
+        ('11051006', '劉心怡', '五專財稅四甲', 11, '主攻', '一般隊員', 110),
+        ('11345007', '王郁婷', '四技國商一甲', 12, '攔中', '一般隊員', 113),
+        ('11346008', '許庭瑜', '二技會資一甲', 15, '副攻', '一般隊員', 113),
+        ('11247009', '蔡佳穎', '四技應外二甲', 6,  '舉球', '一般隊員', 112),
+        ('11342010', '周品妍', '四技會資一甲', 18, '主攻', '一般隊員', 113);
+
+      -- 匯入角色權限矩陣 (RBAC)
+      INSERT INTO role_permissions (role, module_name, module_label, can_read, can_write) VALUES
+        ('隊長',     'team_events',        '球隊行事曆管理', 1, 1),
+        ('隊長',     'attendance_records', '出缺席點名管理', 1, 1),
+        ('隊長',     'fitness_makeups',    '補體能驗收管理', 1, 1),
+        ('隊長',     'finance_ledger',     '球隊經費現金流', 1, 1),
+        ('出缺席長', 'team_events',        '球隊行事曆管理', 1, 1),
+        ('出缺席長', 'attendance_records', '出缺席點名管理', 1, 1),
+        ('出缺席長', 'fitness_makeups',    '補體能驗收管理', 1, 0),
+        ('出缺席長', 'finance_ledger',     '球隊經費現金流', 1, 0),
+        ('體能長',   'team_events',        '球隊行事曆管理', 1, 0),
+        ('體能長',   'attendance_records', '出缺席點名管理', 1, 0),
+        ('體能長',   'fitness_makeups',    '補體能驗收管理', 1, 1),
+        ('體能長',   'finance_ledger',     '球隊經費現金流', 1, 0),
+        ('一般隊員', 'team_events',        '球隊行事曆管理', 1, 0),
+        ('一般隊員', 'attendance_records', '出缺席點名管理', 1, 0),
+        ('一般隊員', 'fitness_makeups',    '補體能驗收管理', 1, 0),
+        ('一般隊員', 'finance_ledger',     '球隊經費現金流', 1, 0);
+
+      -- 匯入 11-12 月球隊行事曆 (明確區分「固定活動」與「非固定活動」)
+      INSERT INTO team_events (event_id, event_date, day_of_week, start_time, end_time, schedule_type, event_type, title, location) VALUES
+        (1, '2026-11-03', '週二', '12:10', '13:30', '固定活動',   '體能訓練', '每週二午間跑步機耐力與重訓',     '心肺教室 / 重訓室'),
+        (2, '2026-11-05', '週四', '17:30', '20:30', '固定活動',   '室外練球', '每週四例行室外基本功與發球',     '北商室外排球場'),
+        (3, '2026-11-08', '週日', '10:00', '14:00', '固定活動',   '室內練球', '每週日室內六人制隊形磨合',       '北商體育館 2F'),
+        (4, '2026-11-10', '週二', '12:10', '13:30', '固定活動',   '體能訓練', '每週二午間地下跑道繩梯敏捷訓練', '地下跑道 / 心肺教室'),
+        (5, '2026-11-12', '週四', '17:30', '20:30', '固定活動',   '室外練球', '每週四例行室外接發球與防守',     '北商室外排球場'),
+        (6, '2026-11-15', '週日', '10:00', '14:00', '固定活動',   '室內練球', '每週日室內賽前模擬對抗賽',       '北商體育館 2F'),
+        (7, '2026-11-23', '週一', '18:00', '21:00', '非固定活動', '友誼賽',   '對台藝大友誼賽',                 '台藝大體育館'),
+        (8, '2026-11-26', '週四', '18:00', '21:00', '非固定活動', '友誼賽',   '對師大友誼賽',                   '北商體育館 2F'),
+        (9, '2026-12-12', '週六', '14:00', '20:00', '非固定活動', '賽事移動', '大專盃提早南下高雄集結與住宿',   '高雄賽區住宿飯店'),
+        (10,'2026-12-13', '週日', '09:00', '18:00', '非固定活動', '盃賽',     '大專排球聯賽一般組預賽 Day 1',   '高雄賽區體育館'),
+        (11,'2026-12-14', '週一', '09:00', '18:00', '非固定活動', '盃賽',     '大專排球聯賽一般組預賽 Day 2',   '高雄賽區體育館');
+
+      -- 匯入出缺席紀錄 (涵蓋：出席、遲到、受傷請假[免補體能]、非受傷請假[需補]、無故缺席[leave_reason 為 NULL，需補])
+      INSERT INTO attendance_records (attendance_id, event_id, student_id, status, leave_reason, note) VALUES
+        -- 11/03 週二體能 (event_id = 1)
+        (1,  1, '11141001', '出席',     NULL,         '準時到場帶操'),
+        (2,  1, '11052002', '出席',     NULL,         '準時點名'),
+        (3,  1, '11243003', '出席',     NULL,         '帶領體能菜單'),
+        (4,  1, '11141004', '請假',     '受傷',       '右腳踝扭傷復健中，依隊規免補體能'),
+        (5,  1, '11244005', '請假',     '期中考溫書', '已事前向出缺席長請假，需補體能'),
+        (6,  1, '11051006', '出席',     NULL,         NULL),
+        (7,  1, '11345007', '無故缺席', NULL,         '未遞交假單且未到場，需補體能'),
+        (8,  1, '11346008', '遲到',     NULL,         '12:25 到場，計入到場'),
+        (9,  1, '11247009', '出席',     NULL,         NULL),
+
+        -- 11/05 週四室外練球 (event_id = 2)
+        (10, 2, '11141001', '出席',     NULL,         NULL),
+        (11, 2, '11052002', '出席',     NULL,         NULL),
+        (12, 2, '11243003', '出席',     NULL,         NULL),
+        (13, 2, '11141004', '請假',     '受傷',       '腳踝持續物理治療，免補體能'),
+        (14, 2, '11244005', '出席',     NULL,         NULL),
+        (15, 2, '11051006', '請假',     '打工衝堂',   '班表臨時調動，需補體能'),
+        (16, 2, '11345007', '出席',     NULL,         NULL),
+        (17, 2, '11346008', '出席',     NULL,         NULL),
+        (18, 2, '11247009', '出席',     NULL,         NULL),
+
+        -- 11/08 週日室內練球 (event_id = 3)
+        (19, 3, '11141001', '出席',     NULL,         NULL),
+        (20, 3, '11052002', '出席',     NULL,         NULL),
+        (21, 3, '11243003', '出席',     NULL,         NULL),
+        (22, 3, '11141004', '出席',     NULL,         '傷癒歸隊參與輕度練球'),
+        (23, 3, '11244005', '出席',     NULL,         NULL),
+        (24, 3, '11051006', '出席',     NULL,         NULL),
+        (25, 3, '11345007', '請假',     '家裡有事',   '返鄉掃墓，需補體能'),
+        (26, 3, '11346008', '無故缺席', NULL,         '睡過頭未請假，需補體能'),
+        (27, 3, '11247009', '請假',     '受傷',       '練習時手指吃蘿蔔乾冰敷，免補體能'),
+
+        -- 11/10 週二體能 (event_id = 4)
+        (28, 4, '11141001', '出席',     NULL,         NULL),
+        (29, 4, '11052002', '出席',     NULL,         NULL),
+        (30, 4, '11243003', '出席',     NULL,         NULL),
+        (31, 4, '11141004', '出席',     NULL,         NULL),
+        (32, 4, '11244005', '出席',     NULL,         NULL),
+        (33, 4, '11051006', '出席',     NULL,         NULL),
+        (34, 4, '11345007', '出席',     NULL,         NULL),
+        (35, 4, '11346008', '出席',     NULL,         NULL),
+        (36, 4, '11247009', '請假',     '期中考溫書', '會計學期中考衝堂，需補體能'),
+
+        -- 11/23 對台藝大友誼賽 (event_id = 7)
+        (37, 7, '11141001', '出席',     NULL,         '先發舉球'),
+        (38, 7, '11052002', '出席',     NULL,         '先發主攻'),
+        (39, 7, '11243003', '出席',     NULL,         '先發攔中'),
+        (40, 7, '11141004', '出席',     NULL,         '先發副攻'),
+        (41, 7, '11244005', '出席',     NULL,         '先發自由球員'),
+        (42, 7, '11051006', '出席',     NULL,         '先發主攻'),
+        (43, 7, '11345007', '出席',     NULL,         '先發攔中'),
+        (44, 7, '11346008', '出席',     NULL,         '替補副攻'),
+        (45, 7, '11247009', '出席',     NULL,         '替補舉球'),
+
+        -- 11/26 對師大友誼賽 (event_id = 8)
+        (46, 8, '11141001', '出席',     NULL,         '先發舉球'),
+        (47, 8, '11052002', '出席',     NULL,         '先發主攻'),
+        (48, 8, '11243003', '出席',     NULL,         '先發攔中'),
+        (49, 8, '11141004', '出席',     NULL,         '先發副攻'),
+        (50, 8, '11244005', '出席',     NULL,         '先發自由球員'),
+        (51, 8, '11051006', '出席',     NULL,         '先發主攻'),
+        (52, 8, '11345007', '出席',     NULL,         '替補攔中'),
+        (53, 8, '11247009', '出席',     NULL,         '替補舉球');
+
+      -- 匯入補體能追蹤紀錄 (對應上述 6 筆非受傷缺席：attendance_id = 5, 7, 15, 25, 26, 36)
+      -- 註：attendance_id = 4, 13, 27 因請假原因為「受傷」，依隊規免補體能，故不會出現在本表！
+      INSERT INTO fitness_makeups (makeup_id, attendance_id, student_id, workout_plan, completed_date, verification_status) VALUES
+        (1, 5,  '11244005', '心肺教室跑步機 20 分鐘 + 地下跑道繩梯 10 趟', '2026-11-06', '已驗收'),
+        (2, 7,  '11345007', '心肺教室跑步機 30 分鐘 + 重訓室核心 4 組',   NULL,         '待補練'),
+        (3, 15, '11051006', '重訓室下肢腿推 4 組 + 地下跑道繩梯 10 趟',   '2026-11-09', '已驗收'),
+        (4, 25, '11345007', '心肺教室跑步機 20 分鐘 + 地下跑道繩梯 10 趟', NULL,         '待補練'),
+        (5, 26, '11346008', '心肺教室跑步機 30 分鐘 + 地下跑道繩梯 15 趟', NULL,         '待補練'),
+        (6, 36, '11247009', '重訓室上肢與核心 4 組 + 心肺教室跑步機 15 分鐘', NULL,       '待補練');
+
+      -- 匯入球隊經費現金流流水帳 (finance_ledger)
+      INSERT INTO finance_ledger (tx_id, tx_date, category, description, tx_type, amount, recorded_by) VALUES
+        (1, '2026-11-01', '期初結轉',   '114-2 學期隊費結餘轉入',           '收入', 4200, '11141001'),
+        (2, '2026-11-03', '隊費收入',   '115-1 學期全隊 10 人隊費（每人 800）', '收入', 8000, '11141001'),
+        (3, '2026-11-06', '器材採購',   '購入 Mikasa V200W 比賽用球 2 顆',  '支出', 3600, '11141001'),
+        (4, '2026-11-12', '醫療耗材',   '補充球隊醫藥箱（肌貼、冰敷袋、噴霧）', '支出',  850, '11243003'),
+        (5, '2026-11-18', '比賽報名費', '大專排球聯賽一般組預賽報名費',     '支出', 2500, '11141001'),
+        (6, '2026-11-23', '友誼賽雜支', '對台藝大友誼賽飲用水與計分板耗材', '支出',  320, '11052002'),
+        (7, '2026-11-26', '友誼賽雜支', '對師大友誼賽飲用水與場地清潔耗材', '支出',  280, '11052002');
+    `;
+
+    // =========================================================================
+    // 2. 區塊二「資料表規格說明」Metadata (6 張資料表完整定義)
+    // =========================================================================
+    const SCHEMA_METADATA = {
+      members: {
+        badge: '核心主表',
+        desc: '記錄國立臺北商業大學女子排球隊（一般組）全體在籍隊員的基本學籍資料、背號、場上位置與隊務角色。',
+        columns: [
+          { name: 'student_id', type: 'TEXT', key: 'PK (主鍵)', desc: '北商學號（唯一識別碼，例如 11141001）' },
+          { name: 'name', type: 'TEXT', key: 'NOT NULL', desc: '球員姓名' },
+          { name: 'class_name', type: 'TEXT', key: 'NOT NULL', desc: '所屬學制與班級（如四技財金三甲、五專會資四甲）' },
+          { name: 'jersey_no', type: 'INTEGER', key: 'UNIQUE', desc: '球衣背號' },
+          { name: 'position', type: 'TEXT', key: 'NOT NULL', desc: '場上專長位置（舉球、主攻、攔中、副攻、自由）' },
+          { name: 'role', type: 'TEXT', key: 'NOT NULL', desc: '隊務權限角色（隊長、出缺席長、體能長、一般隊員）' },
+          { name: 'join_year', type: 'INTEGER', key: 'NOT NULL', desc: '入隊學年度（如 111、113）' }
+        ]
+      },
+      role_permissions: {
+        badge: 'RBAC 權限表',
+        desc: '定義各幹部角色對系統四大功能模組的讀取（can_read）與異動（can_write）權限矩陣。',
+        columns: [
+          { name: 'perm_id', type: 'INTEGER', key: 'PK (主鍵)', desc: '權限規則流水編號' },
+          { name: 'role', type: 'TEXT', key: 'NOT NULL', desc: '對應 members.role 之角色名稱' },
+          { name: 'module_name', type: 'TEXT', key: 'NOT NULL', desc: '系統資料表／模組英文代碼' },
+          { name: 'module_label', type: 'TEXT', key: 'NOT NULL', desc: '系統功能模組中文名稱' },
+          { name: 'can_read', type: 'INTEGER', key: 'CHECK(0/1)', desc: '查詢權限（1 = 允許查詢，0 = 禁止）' },
+          { name: 'can_write', type: 'INTEGER', key: 'CHECK(0/1)', desc: '新增／修改／刪除權限（1 = 允許，0 = 僅唯讀）' }
+        ]
+      },
+      team_events: {
+        badge: '球隊行事曆',
+        desc: '記錄球隊每週固定訓練（週二 12:10-13:30 體能、週四 17:30-20:30 室外、週日 10:00-14:00 室內）與非固定賽程（友誼賽、大專盃）。',
+        columns: [
+          { name: 'event_id', type: 'INTEGER', key: 'PK (主鍵)', desc: '活動編號' },
+          { name: 'event_date', type: 'TEXT', key: 'NOT NULL', desc: '活動日期（YYYY-MM-DD）' },
+          { name: 'day_of_week', type: 'TEXT', key: 'NOT NULL', desc: '星期幾（週一～週日）' },
+          { name: 'start_time', type: 'TEXT', key: 'NOT NULL', desc: '開始時間（如 12:10、17:30）' },
+          { name: 'end_time', type: 'TEXT', key: 'NOT NULL', desc: '結束時間（如 13:30、20:30）' },
+          { name: 'schedule_type', type: 'TEXT', key: 'CHECK', desc: '排程性質：固定活動 vs 非固定活動' },
+          { name: 'event_type', type: 'TEXT', key: 'NOT NULL', desc: '活動類別（體能訓練、室外練球、室內練球、友誼賽、盃賽）' },
+          { name: 'title', type: 'TEXT', key: 'NOT NULL', desc: '活動名稱（如：對台藝大友誼賽、大專盃預賽）' },
+          { name: 'location', type: 'TEXT', key: 'NOT NULL', desc: '場地（心肺教室/重訓室/地下跑道、北商體育館 2F 等）' }
+        ]
+      },
+      attendance_records: {
+        badge: '出缺席核心表',
+        desc: '解決「球員」與「行事曆活動」多對多關聯的明細表，記錄每次點名狀態與請假原因（受傷免補體能）。',
+        columns: [
+          { name: 'attendance_id', type: 'INTEGER', key: 'PK (主鍵)', desc: '點名紀錄編號' },
+          { name: 'event_id', type: 'INTEGER', key: 'FK → team_events', desc: '關聯活動編號' },
+          { name: 'student_id', type: 'TEXT', key: 'FK → members', desc: '關聯球員學號' },
+          { name: 'status', type: 'TEXT', key: 'NOT NULL', desc: '出缺席狀態（出席、遲到、請假、無故缺席）' },
+          { name: 'leave_reason', type: 'TEXT', key: 'NULLABLE', desc: '請假原因（受傷、期中考溫書、打工衝堂等；無故缺席為 NULL）' },
+          { name: 'note', type: 'TEXT', key: 'NULLABLE', desc: '出缺席長或隊長填寫之備註' }
+        ]
+      },
+      fitness_makeups: {
+        badge: '補體能追蹤',
+        desc: '追蹤非受傷原因請假與無故缺席者的自主補體能進度（心肺教室跑步機、重訓室、地下跑道繩梯）與體能長驗收結果。',
+        columns: [
+          { name: 'makeup_id', type: 'INTEGER', key: 'PK (主鍵)', desc: '補體能追蹤編號' },
+          { name: 'attendance_id', type: 'INTEGER', key: 'FK / UNIQUE', desc: '對應的缺席紀錄編號（1 對 1 關聯）' },
+          { name: 'student_id', type: 'TEXT', key: 'FK → members', desc: '應補體能球員學號' },
+          { name: 'workout_plan', type: 'TEXT', key: 'NOT NULL', desc: '體能長指派之補練菜單項目' },
+          { name: 'completed_date', type: 'TEXT', key: 'NULLABLE', desc: '實際完成補練日期（未完成則為 NULL）' },
+          { name: 'verification_status', type: 'TEXT', key: 'NOT NULL', desc: '體能長驗收狀態（已驗收 / 待補練）' }
+        ]
+      },
+      finance_ledger: {
+        badge: '經費現金流',
+        desc: '記錄球隊公積金之期初結轉、學期隊費收入、購買比賽用球、醫藥箱耗材與大專盃報名費等現金流明細。',
+        columns: [
+          { name: 'tx_id', type: 'INTEGER', key: 'PK (主鍵)', desc: '收支交易流水號' },
+          { name: 'tx_date', type: 'TEXT', key: 'NOT NULL', desc: '收支發生日期' },
+          { name: 'category', type: 'TEXT', key: 'NOT NULL', desc: '會計科目類別（隊費收入、器材採購、比賽報名費等）' },
+          { name: 'description', type: 'TEXT', key: 'NOT NULL', desc: '收支摘要明細' },
+          { name: 'tx_type', type: 'TEXT', key: 'CHECK(收入/支出)', desc: '現金流方向（收入 或 支出）' },
+          { name: 'amount', type: 'INTEGER', key: 'CHECK(>=0)', desc: '交易金額（新台幣元）' },
+          { name: 'recorded_by', type: 'TEXT', key: 'FK → members', desc: '登錄經手幹部學號' }
+        ]
+      }
+    };
+
+    // =========================================================================
+    // 3. 區塊三「5 道實戰查詢題目」設定 (PRESET_QUERIES)
+    // =========================================================================
+    const PRESET_QUERIES = [
+      {
+        badge: '題目 1 · 月度出缺席統計試算表',
+        title: '彙整 11 月份每位隊員的應到次數、出席、遲到、請假、無故缺席次數與出席率',
+        problem: '每月底出缺席長需要產出一份月度出缺席試算表，列出全隊 10 位隊員在 11 月份的點名總次數、出席、遲到、請假、無故缺席次數，並計算實際出席率（將「出席」與「遲到」計入到場）。',
+        explain: '使用 LEFT JOIN 以 members 為主表確保剛入隊的新人也列在試算表中，並搭配 SUM(CASE WHEN ...) 條件加總產生橫向報表欄位。',
+        sql: `SELECT 
+  m.student_id AS 學號,
+  m.name AS 姓名,
+  m.class_name AS 班級,
+  COUNT(a.attendance_id) AS 應到次數,
+  SUM(CASE WHEN a.status = '出席' THEN 1 ELSE 0 END) AS 出席,
+  SUM(CASE WHEN a.status = '遲到' THEN 1 ELSE 0 END) AS 遲到,
+  SUM(CASE WHEN a.status = '請假' THEN 1 ELSE 0 END) AS 請假,
+  SUM(CASE WHEN a.status = '無故缺席' THEN 1 ELSE 0 END) AS 無故缺席,
+  CASE 
+    WHEN COUNT(a.attendance_id) = 0 THEN '尚無紀錄'
+    ELSE ROUND(
+      SUM(CASE WHEN a.status IN ('出席', '遲到') THEN 1.0 ELSE 0 END) 
+      * 100.0 / COUNT(a.attendance_id), 1
+    ) || '%'
+  END AS 出席率
+FROM members m
+LEFT JOIN attendance_records a ON m.student_id = a.student_id
+GROUP BY m.student_id, m.name, m.class_name
+ORDER BY m.student_id;`
+      },
+      {
+        badge: '題目 2 · 補體能追蹤（受傷免補規則）',
+        title: '查詢所有「非受傷原因」缺席之補體能明細與體能長驗收狀態',
+        problem: '體能長需要追蹤每週必須至心肺教室（跑步機）、重訓室或地下跑道（繩梯）補練的名單。請列出所有請假或無故缺席紀錄，排除「受傷」免補人員，並關聯補體能菜單與驗收狀態。',
+        explain: '條件必須寫成 (a.leave_reason IS NULL OR a.leave_reason != \'受傷\')，才能同時抓出「無故缺席（NULL）」與「非受傷請假」，並自動過濾掉 3 筆受傷請假。',
+        sql: `SELECT 
+  m.student_id AS 學號,
+  m.name AS 姓名,
+  e.event_date AS 缺席日期,
+  e.title AS 缺席活動,
+  a.status AS 點名狀態,
+  COALESCE(a.leave_reason, '未請假(無故)') AS 缺席原因,
+  f.workout_plan AS 補體能菜單,
+  COALESCE(f.completed_date, '尚未完成') AS 完成日期,
+  f.verification_status AS 驗收狀態
+FROM attendance_records a
+JOIN members m ON a.student_id = m.student_id
+JOIN team_events e ON a.event_id = e.event_id
+LEFT JOIN fitness_makeups f ON a.attendance_id = f.attendance_id
+WHERE a.status IN ('請假', '無故缺席')
+  AND (a.leave_reason IS NULL OR a.leave_reason != '受傷')
+ORDER BY f.verification_status DESC, e.event_date;`
+      },
+      {
+        badge: '題目 3 · 球隊經費現金流報表',
+        title: '產出 11 月份球隊經費收支流水帳與逐筆「即時累計餘額」報表',
+        problem: '隊長與全體隊員需要檢視 11 月份期初結轉、收隊費、買比賽球、醫藥箱與大專盃報名費等每筆金流，並計算每一筆交易發生後的即時公積金結餘。',
+        explain: '利用視窗函數 SUM(...) OVER (ORDER BY tx_date, tx_id) 搭配 CASE WHEN 區分收入（正數）與支出（負數），即可動態算出逐筆累計餘額。',
+        sql: `SELECT 
+  f.tx_id AS 單號,
+  f.tx_date AS 日期,
+  f.category AS 類別,
+  f.description AS 摘要明細,
+  f.tx_type AS 類型,
+  CASE WHEN f.tx_type = '收入' THEN '+' || f.amount ELSE '-' || f.amount END AS 異動金額,
+  SUM(CASE WHEN f.tx_type = '收入' THEN f.amount ELSE -f.amount END) 
+    OVER (ORDER BY f.tx_date, f.tx_id) AS 即時累計餘額,
+  m.name AS 經手人
+FROM finance_ledger f
+JOIN members m ON f.recorded_by = m.student_id
+ORDER BY f.tx_date, f.tx_id;`
+      },
+      {
+        badge: '題目 4 · 友誼賽出賽名單查詢',
+        title: '查詢 11/23 對台藝大、11/26 對師大兩場友誼賽的出賽球員與位置安排',
+        problem: '在 12 月南下高雄大專盃前，球隊分別在 11/23 與台藝大、11/26 與師大進行友誼賽。請查詢這兩場友誼賽實際出席的球員名單、背號、場上位置與先發／替補備註。',
+        explain: '透過 team_events 篩選 event_type = \'友誼賽\'，並串接 attendance_records 與 members 檢視兩場熱身賽的陣容調度。',
+        sql: `SELECT 
+  e.event_date AS 比賽日期,
+  e.title AS 賽事名稱,
+  e.location AS 比賽場地,
+  m.jersey_no AS 背號,
+  m.name AS 球員姓名,
+  m.class_name AS 班級,
+  m.position AS 場上位置,
+  a.note AS 調度備註
+FROM team_events e
+JOIN attendance_records a ON e.event_id = a.event_id
+JOIN members m ON a.student_id = m.student_id
+WHERE e.event_type = '友誼賽'
+  AND a.status = '出席'
+ORDER BY e.event_date, m.jersey_no;`
+      },
+      {
+        badge: '題目 5 · 幹部角色權限控管矩陣',
+        title: '查詢目前在籍成員依其「隊務角色」所擁有的系統模組讀寫權限',
+        problem: '系統依據成員職務（隊長、出缺席長、體能長、一般隊員）分配不同資料表的操作權限。請關聯成員名冊與角色權限表，檢視各角色可寫入（異動）哪些功能模組。',
+        explain: '透過 members.role 與 role_permissions.role 進行關聯，驗證隊長擁有全部 4 項模組寫入權限，而出缺席長與體能長各自負責專屬模組。',
+        sql: `SELECT 
+  m.role AS 隊務角色,
+  m.name AS 負責人姓名,
+  m.class_name AS 班級,
+  p.module_label AS 功能模組,
+  CASE WHEN p.can_read = 1 THEN '✅ 可查詢' ELSE '❌ 禁止' END AS 查詢權限,
+  CASE WHEN p.can_write = 1 THEN '✏️ 可新增/修改' ELSE '🔒 僅唯讀' END AS 異動權限
+FROM members m
+JOIN role_permissions p ON m.role = p.role
+WHERE m.role != '一般隊員'
+ORDER BY 
+  CASE m.role 
+    WHEN '隊長' THEN 1 
+    WHEN '出缺席長' THEN 2 
+    WHEN '體能長' THEN 3 
+  END, p.perm_id;`
+      }
+    ];
+
+    // =========================================================================
+    // 4. 區塊四「結果比較案例」一鍵帶入 SQL 對照腳本
+    // =========================================================================
+    const COMPARE_CASES = {
+      case1A: {
+        presetIdx: 1,
+        sql: `SELECT m.name AS 姓名, e.event_date AS 缺席日期, e.title AS 缺席活動,
+       a.status AS 點名狀態, a.leave_reason AS 請假原因
+FROM attendance_records a
+JOIN members m ON a.student_id = m.student_id
+JOIN team_events e ON a.event_id = e.event_id
+WHERE a.status IN ('請假', '無故缺席')
+  AND a.leave_reason != '受傷';`
+      },
+      case1B: {
+        presetIdx: 1,
+        sql: `SELECT m.name AS 姓名, e.event_date AS 缺席日期, e.title AS 缺席活動,
+       a.status AS 點名狀態, COALESCE(a.leave_reason, 'NULL (無故缺席)') AS 請假原因
+FROM attendance_records a
+JOIN members m ON a.student_id = m.student_id
+JOIN team_events e ON a.event_id = e.event_id
+WHERE a.status IN ('請假', '無故缺席')
+  AND (a.leave_reason IS NULL OR a.leave_reason != '受傷');`
+      },
+      case2A: {
+        presetIdx: 0,
+        sql: `SELECT m.student_id AS 學號, m.name AS 姓名, m.class_name AS 班級,
+       COUNT(a.attendance_id) AS 應到次數
+FROM members m
+INNER JOIN attendance_records a
+  ON m.student_id = a.student_id
+GROUP BY m.student_id, m.name, m.class_name
+ORDER BY m.student_id;`
+      },
+      case2B: {
+        presetIdx: 0,
+        sql: `SELECT m.student_id AS 學號, m.name AS 姓名, m.class_name AS 班級,
+       COUNT(a.attendance_id) AS 應到次數
+FROM members m
+LEFT JOIN attendance_records a
+  ON m.student_id = a.student_id
+GROUP BY m.student_id, m.name, m.class_name
+ORDER BY m.student_id;`
+      }
+    };
+
+    // =========================================================================
+    // 5. 全域狀態與 DOM 渲染函式
+    // =========================================================================
+    let db = null;
+    let currentPresetIndex = 0;
+
+    // 渲染區塊二：資料表欄位說明與真實 SQLite 樣本資料
+    function renderSchemaTable(tableName) {
+      const meta = SCHEMA_METADATA[tableName];
+      if (!meta || !db) return;
+
+      // 更新分頁按鈕樣式
+      document.querySelectorAll('.schema-tab-btn').forEach(btn => {
+        const isActive = btn.dataset.table === tableName;
+        if (isActive) {
+          btn.className = 'schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-ntub-900 text-white shadow-sm transition';
+        } else {
+          btn.className = 'schema-tab-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition';
+        }
+      });
+
+      document.getElementById('schema-table-title').textContent = tableName;
+      document.getElementById('schema-table-badge').textContent = meta.badge;
+      document.getElementById('schema-table-desc').textContent = meta.desc;
+
+      // 渲染欄位規格表
+      const colBody = document.getElementById('schema-columns-body');
+      colBody.innerHTML = meta.columns.map(col => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-4 font-mono font-bold text-ntub-900">${col.name}</td>
+          <td class="py-2.5 px-4 font-mono text-xs text-slate-600">${col.type}</td>
+          <td class="py-2.5 px-4 font-mono text-xs">
+            <span class="px-2 py-0.5 rounded ${col.key.includes('PK') ? 'bg-amber-100 text-amber-900 font-bold' : col.key.includes('FK') ? 'bg-sky-100 text-sky-900 font-semibold' : 'bg-slate-100 text-slate-600'}">
+              ${col.key}
+            </span>
+          </td>
+          <td class="py-2.5 px-4 text-slate-700">${col.desc}</td>
+        </tr>
+      `).join('');
+
+      // 從 SQLite 查詢真實樣本資料並渲染
+      try {
+        const res = db.exec(`SELECT * FROM ${tableName};`);
+        const thead = document.getElementById('sample-data-head');
+        const tbody = document.getElementById('sample-data-body');
+        const countBadge = document.getElementById('sample-row-count');
+
+        if (!res || res.length === 0) {
+          thead.innerHTML = '';
+          tbody.innerHTML = '<tr><td class="p-4 text-slate-500">無資料</td></tr>';
+          countBadge.textContent = '共 0 筆';
+          return;
+        }
+
+        const { columns, values } = res[0];
+        countBadge.textContent = `共 ${values.length} 筆`;
+
+        thead.innerHTML = `<tr>${columns.map(c => `<th class="py-2.5 px-4 font-mono font-bold text-xs">${c}</th>`).join('')}</tr>`;
+        tbody.innerHTML = values.map(row => `
+          <tr class="hover:bg-blue-50/50">
+            ${row.map(val => {
+              if (val === null) {
+                return `<td class="py-2.5 px-4 font-mono text-xs text-slate-400 italic">NULL</td>`;
+              }
+              return `<td class="py-2.5 px-4 text-slate-800">${escapeHtml(String(val))}</td>`;
+            }).join('')}
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('載入樣本資料失敗:', err);
+      }
+    }
+
+    // 渲染通用結果表格（用於「預期結果」與「實際查詢結果」）
+    function renderTableToElements(resultSet, theadEl, tbodyEl) {
+      if (!resultSet || resultSet.length === 0) {
+        theadEl.innerHTML = '';
+        tbodyEl.innerHTML = `<tr><td class="p-6 text-center text-slate-500 text-sm">查詢執行成功，但未回傳任何資料列（0 rows）。</td></tr>`;
+        return 0;
+      }
+      const { columns, values } = resultSet[0];
+      theadEl.innerHTML = `<tr>${columns.map(col => `<th class="py-2.5 px-4 font-bold text-xs tracking-wide">${escapeHtml(col)}</th>`).join('')}</tr>`;
+      tbodyEl.innerHTML = values.map(row => `
+        <tr class="hover:bg-blue-50/50 transition-colors">
+          ${row.map(val => {
+            if (val === null) {
+              return `<td class="py-2.5 px-4 font-mono text-xs text-slate-400 italic">NULL</td>`;
+            }
+            const str = String(val);
+            if (str === '已驗收' || str.includes('✅')) {
+              return `<td class="py-2.5 px-4 font-semibold text-emerald-700">${escapeHtml(str)}</td>`;
+            }
+            if (str === '待補練' || str === '無故缺席' || str.includes('❌')) {
+              return `<td class="py-2.5 px-4 font-semibold text-rose-700">${escapeHtml(str)}</td>`;
+            }
+            return `<td class="py-2.5 px-4 text-slate-800">${escapeHtml(str)}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+      return values.length;
+    }
+
+    // 切換並載入區塊三的預設題目
+    function selectPresetQuery(index) {
+      currentPresetIndex = index;
+      const preset = PRESET_QUERIES[index];
+      if (!preset) return;
+
+      // 更新 5 顆題目按鈕選中外觀
+      document.querySelectorAll('.preset-btn').forEach((btn, idx) => {
+        const labelEl = btn.querySelector('div:first-child');
+        if (idx === index) {
+          btn.className = 'preset-btn text-left p-4 rounded-xl border-2 border-ntub-900 bg-ntub-900 text-white shadow-sm transition';
+          if (labelEl) labelEl.className = 'text-xs font-bold text-amber-300 mb-1';
+        } else {
+          btn.className = 'preset-btn text-left p-4 rounded-xl border border-slate-200 bg-white text-slate-900 hover:border-ntub-900 shadow-sm transition';
+          if (labelEl) labelEl.className = 'text-xs font-bold text-ntub-700 mb-1';
+        }
+      });
+
+      // 更新題目文字與解說
+      document.getElementById('q-badge').textContent = preset.badge;
+      document.getElementById('q-title').textContent = preset.title;
+      document.getElementById('q-problem').textContent = preset.problem;
+      document.getElementById('q-explain').textContent = preset.explain;
+
+      // 將預設 SQL 填入編輯器
+      const editor = document.getElementById('sql-editor');
+      editor.value = preset.sql;
+
+      // 計算並顯示「預期結果 (Expected Result)」
+      if (db) {
+        try {
+          const expectedRes = db.exec(preset.sql);
+          const expectedCount = renderTableToElements(
+            expectedRes,
+            document.getElementById('expected-thead'),
+            document.getElementById('expected-tbody')
+          );
+          document.getElementById('expected-meta').textContent = `預期回傳 ${expectedCount} 筆`;
+        } catch (e) {
+          console.error('計算預期結果失敗:', e);
+        }
+        // 同步執行一次顯示在「實際查詢結果」
+        runUserSQL();
+      }
+    }
+
+    // 執行 SQL 編輯器內的查詢語法
+    function runUserSQL() {
+      if (!db) return;
+      const sql = document.getElementById('sql-editor').value.trim();
+      const errBox = document.getElementById('sql-error-box');
+      const errMsg = document.getElementById('sql-error-msg');
+      const resContainer = document.getElementById('sql-result-container');
+      const metaBadge = document.getElementById('result-meta');
+      const timeBadge = document.getElementById('result-time');
+
+      if (!sql) {
+        errBox.classList.remove('hidden');
+        resContainer.classList.add('hidden');
+        errMsg.textContent = '錯誤：SQL 查詢編輯器目前為空白，請輸入 SELECT 查詢語句。';
+        metaBadge.className = 'text-xs font-mono px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold';
+        metaBadge.textContent = '執行失敗';
+        return;
+      }
+
+      const startTime = performance.now();
+      try {
+        const results = db.exec(sql);
+        const elapsed = (performance.now() - startTime).toFixed(2);
+
+        errBox.classList.add('hidden');
+        resContainer.classList.remove('hidden');
+
+        const rowCount = renderTableToElements(
+          results,
+          document.getElementById('result-thead'),
+          document.getElementById('result-tbody')
+        );
+
+        metaBadge.className = 'text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold';
+        metaBadge.textContent = `成功回傳 ${rowCount} 筆`;
+        timeBadge.textContent = `耗時：${elapsed} ms`;
+      } catch (err) {
+        const elapsed = (performance.now() - startTime).toFixed(2);
+        resContainer.classList.add('hidden');
+        errBox.classList.remove('hidden');
+        errMsg.textContent = err.message || String(err);
+
+        metaBadge.className = 'text-xs font-mono px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold';
+        metaBadge.textContent = '語法 / 執行錯誤';
+        timeBadge.textContent = `耗時：${elapsed} ms`;
+      }
+    }
+
+    // 區塊四一鍵帶入比較案例至上方編輯器並捲動
+    window.loadCompareSQL = function(caseKey) {
+      const target = COMPARE_CASES[caseKey];
+      if (!target) return;
+      selectPresetQuery(target.presetIdx);
+      document.getElementById('sql-editor').value = target.sql;
+      runUserSQL();
+      document.getElementById('query').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    // HTML 跳脫防 XSS
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // =========================================================================
+    // 6. 綁定所有 UI 事件與初始化 SQLite WebAssembly
+    // =========================================================================
+    function bindUIEvents() {
+      // 手機版漢堡選單切換
+      const mobileBtn = document.getElementById('mobile-menu-btn');
+      const mobileMenu = document.getElementById('mobile-menu');
+      if (mobileBtn && mobileMenu) {
+        mobileBtn.addEventListener('click', () => {
+          mobileMenu.classList.toggle('hidden');
+        });
+      }
+
+      // 區塊二：6 張資料表分頁切換
+      document.querySelectorAll('.schema-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          renderSchemaTable(btn.dataset.table);
+        });
+      });
+
+      // 區塊三：5 道題目切換
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.preset, 10);
+          selectPresetQuery(idx);
+        });
+      });
+
+      // 執行查詢按鈕
+      document.getElementById('btn-run-sql').addEventListener('click', runUserSQL);
+
+      // 重設為題目預設 SQL
+      document.getElementById('btn-reset-sql').addEventListener('click', () => {
+        selectPresetQuery(currentPresetIndex);
+      });
+
+      // 示範錯誤語法按鈕（刻意寫錯欄位名稱）
+      document.getElementById('btn-format-demo-err').addEventListener('click', () => {
+        document.getElementById('sql-editor').value =
+`-- 刻意示範查詢不存在的欄位 (student_phone) 觸發 SQLite 錯誤訊息
+SELECT student_id, name, student_phone
+FROM members
+WHERE role = '隊長';`;
+        runUserSQL();
+      });
+
+      // 支援 Ctrl+Enter / Cmd+Enter 快捷鍵執行 SQL
+      document.getElementById('sql-editor').addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          runUserSQL();
+        }
+      });
+    }
+
+    async function initDatabase() {
+      const dot = document.getElementById('db-status-dot');
+      const text = document.getElementById('db-status-text');
+      try {
+        const SQL = await initSqlJs({
+          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
+        });
+        db = new SQL.Database();
+        db.run(INIT_SQL_SCRIPT);
+
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        text.textContent = 'SQLite 就緒';
+
+        // 預設載入第一張資料表與第一道查詢題目
+        renderSchemaTable('members');
+        selectPresetQuery(0);
+      } catch (err) {
+        console.error('SQLite 初始化錯誤:', err);
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        text.textContent = 'SQLite 載入失敗';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      bindUIEvents();
+      initDatabase();
+    });
+  </script>
+</body>
+</html>
